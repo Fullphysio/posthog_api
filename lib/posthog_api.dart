@@ -7,6 +7,6 @@ library;
 
 export 'src/event.dart';
 export 'src/exceptions.dart';
-export 'src/feature_flags.dart' show FeatureFlagResult, PostHogFlagsAndPayloads;
+export 'src/feature_flags.dart' show FeatureFlagResult, FeatureFlagsAndPayloads;
 export 'src/posthog.dart';
 export 'src/version.dart' show posthogApiVersion;

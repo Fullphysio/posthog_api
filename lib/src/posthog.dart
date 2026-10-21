@@ -48,17 +48,15 @@ class PostHog {
   /// - [disableGeoip]: adds `$geoip_disable: true` to events and skips GeoIP in
   ///   flag evaluation, so the server's IP is not mistaken for the user's.
   /// - [disabled]: turns every call into a no-op, e.g. in tests or emulators.
-  /// - [historicalMigration]: marks batches as a historical import.
   /// - [disableCompression]: sends `/batch/` bodies uncompressed. Bodies are
   ///   gzipped by default on platforms with `dart:io`.
-  /// - [sendFeatureFlagEvent]: default for `sendFeatureFlagEvents` on
+  /// - [sendFeatureFlagEvents]: default for the same parameter on
   ///   [getFeatureFlag] and friends.
-  /// - [maxCacheSize]: distinct ids remembered when deduplicating
-  ///   `$feature_flag_called` events.
-  /// - [beforeSend]: hooks applied in order to every captured event.
+  /// - [beforeSend]: hooks applied in order to every captured event. A hook
+  ///   that throws drops the event and reports the error to [onError].
   /// - [onError]: receives errors that have no caller to be thrown to.
-  ///   Defaults to printing them.
-  /// - [debug]: prints queue and retry diagnostics.
+  ///   Defaults to printing them. If it throws, the error goes to the
+  ///   current zone's uncaught-error handler.
   /// - [httpClient]: a client to reuse. When omitted the client creates one
   ///   and closes it in [shutdown].
   PostHog(
@@ -74,20 +72,17 @@ class PostHog {
     Duration fetchRetryDelay = const Duration(seconds: 3),
     bool disableGeoip = true,
     bool disabled = false,
-    bool historicalMigration = false,
     bool disableCompression = false,
-    bool sendFeatureFlagEvent = true,
-    int maxCacheSize = 50000,
+    bool sendFeatureFlagEvents = true,
     List<BeforeSend> beforeSend = const [],
     PostHogErrorHandler? onError,
-    bool debug = false,
     http.Client? httpClient,
-  })  : apiKey = _requireApiKey(apiKey),
+  })  : _apiKey = _requireApiKey(apiKey),
         host = Uri.parse(
           (host?.toString() ?? 'https://us.i.posthog.com')
               .replaceFirst(RegExp(r'/+$'), ''),
         ),
-        flushAt = max(flushAt, 1),
+        _flushAt = max(flushAt, 1),
         _maxBatchSize = max(max(flushAt, 1), maxBatchSize),
         _maxQueueSize = max(max(flushAt, 1), maxQueueSize),
         _flushInterval = flushInterval,
@@ -97,25 +92,18 @@ class PostHog {
         _fetchRetryDelay = fetchRetryDelay,
         _disableGeoip = disableGeoip,
         _disabled = disabled,
-        _historicalMigration = historicalMigration,
         _disableCompression = disableCompression,
-        _sendFeatureFlagEvent = sendFeatureFlagEvent,
-        _maxCacheSize = maxCacheSize,
+        _sendFeatureFlagEvents = sendFeatureFlagEvents,
         _beforeSend = List.unmodifiable(beforeSend),
         _onError = onError ?? _printError,
-        _debug = debug,
         _httpClient = httpClient ?? http.Client(),
         _ownsHttpClient = httpClient == null;
-
-  /// The project API key events are sent with.
-  final String apiKey;
 
   /// The ingestion host, without a trailing slash.
   final Uri host;
 
-  /// Queue length that triggers a background flush.
-  final int flushAt;
-
+  final String _apiKey;
+  final int _flushAt;
   int _maxBatchSize;
   final int _maxQueueSize;
   final Duration _flushInterval;
@@ -125,23 +113,22 @@ class PostHog {
   final Duration _fetchRetryDelay;
   final bool _disableGeoip;
   final bool _disabled;
-  final bool _historicalMigration;
   final bool _disableCompression;
-  final bool _sendFeatureFlagEvent;
-  final int _maxCacheSize;
+  final bool _sendFeatureFlagEvents;
   final List<BeforeSend> _beforeSend;
   final PostHogErrorHandler _onError;
-  final bool _debug;
   final http.Client _httpClient;
   final bool _ownsHttpClient;
 
-  final List<Map<String, Object?>> _queue = [];
+  final List<_QueuedEvent> _queue = [];
   final Set<Future<void>> _pending = {};
   final Map<String, Set<String>> _sentFlagCalls = {};
   Timer? _flushTimer;
   Future<void>? _flushFuture;
+  Future<void>? _backgroundFlush;
   Future<void>? _shutdownFuture;
   bool _isShutDown = false;
+  bool _isClosing = false;
 
   /// Whether the client was created with `disabled: true`.
   bool get isDisabled => _disabled;
@@ -160,12 +147,14 @@ class PostHog {
   /// and attached as `$feature/<key>` and `$active_feature_flags`. [flush]
   /// waits for that evaluation, so the event is never left behind.
   ///
-  /// Never throws for delivery problems; see [flush] and `onError`.
+  /// Never throws for delivery problems, a throwing `beforeSend` hook or a
+  /// property that cannot be encoded as JSON: those go to `onError` and the
+  /// event is dropped. A [DateTime] property is sent as an ISO-8601 string.
   void capture({
     String? distinctId,
     required String event,
     Map<String, Object?>? properties,
-    Map<String, Object>? groups,
+    Map<String, String>? groups,
     DateTime? timestamp,
     String? uuid,
     bool? disableGeoip,
@@ -197,12 +186,14 @@ class PostHog {
   /// PostHog has accepted it.
   ///
   /// Throws [PostHogHttpException] or [PostHogNetworkException] once retries
-  /// are exhausted. Prefer [capture] plus [flush] when sending several events.
+  /// are exhausted, and a [JsonUnsupportedObjectError] for a property that
+  /// cannot be encoded. Prefer [capture] plus [flush] when sending several
+  /// events.
   Future<void> captureImmediate({
     String? distinctId,
     required String event,
     Map<String, Object?>? properties,
-    Map<String, Object>? groups,
+    Map<String, String>? groups,
     DateTime? timestamp,
     String? uuid,
     bool? disableGeoip,
@@ -351,8 +342,7 @@ class PostHog {
   /// not be reached.
   ///
   /// Sends a `$feature_flag_called` event once per user and value unless
-  /// [sendFeatureFlagEvents] (default: the client's `sendFeatureFlagEvent`)
-  /// is `false`.
+  /// [sendFeatureFlagEvents] (default: the client's setting) is `false`.
   Future<Object?> getFeatureFlag(
     String key,
     String distinctId, {
@@ -368,7 +358,7 @@ class PostHog {
       groups: groups,
       personProperties: personProperties,
       groupProperties: groupProperties,
-      sendFeatureFlagEvents: sendFeatureFlagEvents ?? _sendFeatureFlagEvent,
+      sendFeatureFlagEvents: sendFeatureFlagEvents ?? _sendFeatureFlagEvents,
       disableGeoip: disableGeoip,
     );
     return result?.value;
@@ -440,7 +430,7 @@ class PostHog {
         groups: groups,
         personProperties: personProperties,
         groupProperties: groupProperties,
-        sendFeatureFlagEvents: sendFeatureFlagEvents ?? _sendFeatureFlagEvent,
+        sendFeatureFlagEvents: sendFeatureFlagEvents ?? _sendFeatureFlagEvents,
         disableGeoip: disableGeoip,
       );
 
@@ -467,7 +457,7 @@ class PostHog {
 
   /// Every flag value and payload for [distinctId], or only [flagKeys] when
   /// given. Empty when PostHog could not be reached.
-  Future<PostHogFlagsAndPayloads> getAllFlagsAndPayloads(
+  Future<FeatureFlagsAndPayloads> getAllFlagsAndPayloads(
     String distinctId, {
     Map<String, String>? groups,
     Map<String, Object?>? personProperties,
@@ -483,7 +473,7 @@ class PostHog {
       disableGeoip: disableGeoip,
       flagKeys: flagKeys,
     );
-    return PostHogFlagsAndPayloads(
+    return FeatureFlagsAndPayloads(
       featureFlags: response?.values ?? const {},
       featureFlagPayloads: response?.payloads ?? const {},
     );
@@ -497,7 +487,11 @@ class PostHog {
   /// [PostHogNetworkException] once retries are exhausted. After a network
   /// error the unsent events stay queued; after an HTTP error the rejected
   /// batch is dropped, since resending it would fail the same way.
-  Future<void> flush() {
+  ///
+  /// With a [timeout], throws [PostHogTimeoutException] once it passes; the
+  /// flush carries on in the background and unsent events stay queued. Set
+  /// one on serverless runtimes so an outage cannot hold a request open.
+  Future<void> flush({Duration? timeout}) {
     final previous = _flushFuture;
     final next = () async {
       if (previous != null) await previous.then((_) {}, onError: (_) {});
@@ -508,15 +502,20 @@ class PostHog {
     next.whenComplete(() {
       if (identical(_flushFuture, next)) _flushFuture = null;
     }).ignore();
-    return next;
+    if (timeout == null) return next;
+    return next.timeout(
+      timeout,
+      onTimeout: () => throw PostHogTimeoutException(_queue.length),
+    );
   }
 
   /// Sends every queued event and releases the HTTP client. Call it once,
   /// before the process exits; use [flush] between requests instead.
   ///
-  /// Delivery errors go to `onError`. Throws
-  /// [PostHogShutdownTimeoutException] when events are still queued after
-  /// [timeout]. Any call on this client afterwards throws a [StateError].
+  /// Delivery errors go to `onError`. Throws [PostHogTimeoutException] when
+  /// events are still queued after [timeout]; requests still in flight are
+  /// then abandoned without retrying. Any call on this client afterwards
+  /// throws a [StateError].
   Future<void> shutdown({Duration timeout = const Duration(seconds: 30)}) {
     return _shutdownFuture ??= _shutdown(timeout);
   }
@@ -532,14 +531,15 @@ class PostHog {
             await flush();
           }
         } on PostHogException catch (error, stackTrace) {
-          _onError(error, stackTrace);
+          _report(error, stackTrace);
         }
       }()
           .timeout(timeout);
     } on TimeoutException {
       timedOut = true;
-      throw PostHogShutdownTimeoutException(_queue.length);
+      throw PostHogTimeoutException(_queue.length);
     } finally {
+      _isClosing = true;
       _isShutDown = true;
       _cancelFlushTimer();
       if (_ownsHttpClient) _httpClient.close();
@@ -550,7 +550,7 @@ class PostHog {
     required String? distinctId,
     required String event,
     required Map<String, Object?>? properties,
-    required Map<String, Object>? groups,
+    required Map<String, String>? groups,
     required DateTime? timestamp,
     required String? uuid,
     required bool? disableGeoip,
@@ -571,15 +571,13 @@ class PostHog {
       disableGeoip: disableGeoip,
     );
     for (final hook in _beforeSend) {
-      prepared = hook(prepared!);
-      if (prepared == null) {
-        _log("Event '$event' was rejected in beforeSend function");
+      try {
+        prepared = hook(prepared!);
+      } on Object catch (error, stackTrace) {
+        _report(error, stackTrace);
         return null;
       }
-      if (prepared.properties.isEmpty) {
-        _log("Event '${prepared.event}' has no properties after beforeSend "
-            'function, this is likely an error.');
-      }
+      if (prepared == null) return null;
     }
     return prepared;
   }
@@ -659,24 +657,46 @@ class PostHog {
     PostHogEvent event,
   ) {
     if (_isShutDown) return;
-    final message = _prepareMessage(type, payload, event);
-    if (_queue.length >= _maxQueueSize) {
-      _queue.removeAt(0);
-      _log('Queue is full, the oldest event is dropped.');
+    final _QueuedEvent queued;
+    try {
+      queued = _QueuedEvent(_encode(_prepareMessage(type, payload, event)));
+    } on Object catch (error, stackTrace) {
+      _report(error, stackTrace);
+      return;
     }
-    _queue.add(message);
-    if (_queue.length >= flushAt) _flushInBackground();
-    if (_flushInterval > Duration.zero && _flushTimer == null) {
-      _flushTimer = Timer(_flushInterval, _flushInBackground);
-    }
+    if (_queue.length >= _maxQueueSize) _queue.removeAt(0);
+    _queue.add(queued);
+    if (_queue.length >= _flushAt) _flushInBackground();
+    _scheduleFlushTimer();
   }
 
   Future<void> _sendImmediate(Map<String, Object?> message) async {
-    await _postBatch([message]);
+    await _postBatch([_QueuedEvent(_encode(message))]);
   }
 
   void _flushInBackground() {
-    flush().catchError(_onError).ignore();
+    if (_backgroundFlush != null) return;
+    _backgroundFlush = flush().then((_) => true, onError: (
+      Object error,
+      StackTrace stackTrace,
+    ) {
+      _report(error, stackTrace);
+      return false;
+    }).then((succeeded) {
+      _backgroundFlush = null;
+      if (_isShutDown) return;
+      if (succeeded && _queue.length >= _flushAt) {
+        _flushInBackground();
+      } else if (_queue.isNotEmpty) {
+        _scheduleFlushTimer();
+      }
+    });
+  }
+
+  void _scheduleFlushTimer() {
+    if (_flushInterval > Duration.zero && _flushTimer == null) {
+      _flushTimer = Timer(_flushInterval, _flushInBackground);
+    }
   }
 
   void _cancelFlushTimer() {
@@ -687,7 +707,7 @@ class PostHog {
   void _track(Future<void> future) {
     _pending.add(future);
     future
-        .catchError(_onError)
+        .catchError(_report)
         .whenComplete(() => _pending.remove(future))
         .ignore();
   }
@@ -713,8 +733,6 @@ class PostHog {
       } on PostHogHttpException catch (error) {
         if (error.statusCode == 413 && batch.length > 1) {
           _maxBatchSize = max(1, batch.length ~/ 2);
-          _log('Received 413 when sending batch of size ${batch.length}, '
-              'reducing batch size to $_maxBatchSize');
           continue;
         }
         _removeFromQueue(batch);
@@ -725,19 +743,16 @@ class PostHog {
     }
   }
 
-  void _removeFromQueue(List<Map<String, Object?>> batch) {
-    final sent = Set<Map<String, Object?>>.identity()..addAll(batch);
+  void _removeFromQueue(List<_QueuedEvent> batch) {
+    final sent = Set<_QueuedEvent>.identity()..addAll(batch);
     _queue.removeWhere(sent.contains);
   }
 
-  Future<void> _postBatch(List<Map<String, Object?>> batch) async {
-    final body = <String, Object?>{
-      'api_key': apiKey,
-      'batch': batch,
-      'sent_at': _isoTimestamp(DateTime.now()),
-      if (_historicalMigration) 'historical_migration': true,
-    };
-    final bytes = utf8.encode(jsonEncode(body));
+  Future<void> _postBatch(List<_QueuedEvent> batch) async {
+    final body = '{"api_key":${jsonEncode(_apiKey)},'
+        '"batch":[${batch.map((event) => event.json).join(',')}],'
+        '"sent_at":"${_isoTimestamp(DateTime.now())}"}';
+    final bytes = utf8.encode(body);
     final compressed = _disableCompression ? null : gzipEncode(bytes);
     await _fetchWithRetry(
       Uri.parse('$host/batch/'),
@@ -759,14 +774,15 @@ class PostHog {
     required Duration timeout,
   }) async {
     for (var attempt = 0;; attempt++) {
-      if (attempt > 0) await Future<void>.delayed(_fetchRetryDelay);
       try {
         return await _fetch(url,
             bytes: bytes, headers: headers, timeout: timeout);
       } on PostHogException catch (error) {
-        if (attempt >= retryCount || !_isRetriable(error)) rethrow;
-        _log('Retrying $url after ${error.message}');
+        if (attempt >= retryCount || !_isRetriable(error) || _isClosing) {
+          rethrow;
+        }
       }
+      await Future<void>.delayed(_fetchRetryDelay);
     }
   }
 
@@ -774,7 +790,7 @@ class PostHog {
         PostHogNetworkException() => true,
         PostHogHttpException(:final statusCode) =>
           statusCode == 408 || statusCode == 429 || statusCode >= 500,
-        PostHogShutdownTimeoutException() => false,
+        PostHogTimeoutException() => false,
       };
 
   Future<http.Response> _fetch(
@@ -783,19 +799,24 @@ class PostHog {
     required Map<String, String> headers,
     required Duration timeout,
   }) async {
-    final request = http.Request('POST', url)
-      ..headers.addAll({
-        if (canSetUserAgent)
-          'User-Agent': '$posthogApiLibraryId/$posthogApiVersion',
-        ...headers,
-      })
-      ..bodyBytes = bytes;
+    final abort = Completer<void>();
+    final request =
+        http.AbortableRequest('POST', url, abortTrigger: abort.future)
+          ..headers.addAll({
+            if (canSetUserAgent)
+              'User-Agent': '$posthogApiLibraryId/$posthogApiVersion',
+            ...headers,
+          })
+          ..bodyBytes = bytes;
     final http.Response response;
     try {
       response = await _httpClient
           .send(request)
           .then(http.Response.fromStream)
-          .timeout(timeout);
+          .timeout(timeout, onTimeout: () {
+        abort.complete();
+        throw TimeoutException('No response from $url', timeout);
+      });
     } on Object catch (error) {
       throw PostHogNetworkException(error);
     }
@@ -821,7 +842,7 @@ class PostHog {
     _checkNotShutDown();
     final deviceId = personProperties[r'$device_id'];
     final body = <String, Object?>{
-      'token': apiKey,
+      'token': _apiKey,
       'distinct_id': distinctId,
       'groups': groups,
       'person_properties': personProperties,
@@ -841,13 +862,11 @@ class PostHog {
       );
       final decoded = jsonDecode(httpResponse.body);
       if (decoded is! Map<String, Object?>) {
-        throw FormatException(
-          'Unexpected /flags/ response: ${httpResponse.body}',
-        );
+        throw const FormatException('The /flags/ response is not an object');
       }
       response = _FlagsResponse.fromJson(decoded);
     } on Object catch (error, stackTrace) {
-      _onError(error, stackTrace);
+      _report(error, stackTrace);
       return null;
     }
 
@@ -937,11 +956,12 @@ class PostHog {
     required Map<String, String>? groups,
     required bool? disableGeoip,
   }) {
+    if (_isShutDown) return;
     final value = result?.value;
     final reportedKey = '${key}_$value';
     final reported = _sentFlagCalls[distinctId];
     if (reported != null && reported.contains(reportedKey)) return;
-    if (reported == null && _sentFlagCalls.length >= _maxCacheSize) {
+    if (reported == null && _sentFlagCalls.length >= _maxFlagCallCacheSize) {
       _sentFlagCalls.clear();
     }
     _sentFlagCalls.putIfAbsent(distinctId, () => {}).add(reportedKey);
@@ -974,10 +994,7 @@ class PostHog {
   ) async {
     final response = await _fetchFlags(
       event.distinctId,
-      groups: {
-        for (final entry in (event.groups ?? const {}).entries)
-          entry.key: entry.value.toString(),
-      },
+      groups: event.groups ?? const {},
       personProperties: const {},
       groupProperties: const {},
       disableGeoip: event.disableGeoip,
@@ -1011,9 +1028,21 @@ class PostHog {
     }
   }
 
-  void _log(String message) {
-    if (_debug) _print(message);
+  void _report(Object error, StackTrace stackTrace) {
+    try {
+      _onError(error, stackTrace);
+    } on Object catch (handlerError, handlerStackTrace) {
+      Zone.current.handleUncaughtError(handlerError, handlerStackTrace);
+    }
   }
+
+  static const _maxFlagCallCacheSize = 50000;
+
+  static String _encode(Object? value) =>
+      jsonEncode(value, toEncodable: _toEncodable);
+
+  static Object? _toEncodable(Object? value) =>
+      value is DateTime ? _isoTimestamp(value) : (value as dynamic).toJson();
 
   static void _print(String message) => print('[PostHog] $message');
 
@@ -1031,4 +1060,10 @@ class PostHog {
     }
     return apiKey;
   }
+}
+
+final class _QueuedEvent {
+  _QueuedEvent(this.json);
+
+  final String json;
 }

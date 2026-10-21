@@ -47,8 +47,11 @@ Three tiers:
   "posthog_api CI" project on PostHog EU, so test events never mix with real
   data. Deliberately not on pull
   requests: an upstream outage must never block a merge.
-- `publish.yml` — releases on a `v<version>` tag via GitHub OIDC. No stored
-  credentials.
+- `publish.yml` — releases on a `v<version>` tag via GitHub OIDC, through the
+  `pub.dev` GitHub environment: only `v*` tags, and a required reviewer must
+  approve the run. pub.dev's automated publishing must require the same
+  environment. No stored credentials. Every workflow sets read-only
+  `permissions`; actions are pinned by commit SHA.
 
 ## Releasing
 
@@ -56,7 +59,7 @@ Three tiers:
    `lib/src/version.dart` (a test keeps them in step), and add a
    `CHANGELOG.md` entry.
 2. Merge to `main` and let CI go green.
-3. Tag and push:
+3. Tag and push, then approve the `pub.dev` deployment on the Actions run:
 
    ```
    git tag v1.2.3 && git push origin v1.2.3

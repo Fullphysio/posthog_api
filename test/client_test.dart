@@ -17,7 +17,6 @@ PostHog _client(
   Duration flushInterval = Duration.zero,
   Duration requestTimeout = const Duration(seconds: 10),
   bool disableCompression = true,
-  bool historicalMigration = false,
   bool disabled = false,
   List<BeforeSend> beforeSend = const [],
   PostHogErrorHandler? onError,
@@ -34,7 +33,6 @@ PostHog _client(
       flushInterval: flushInterval,
       requestTimeout: requestTimeout,
       disableCompression: disableCompression,
-      historicalMigration: historicalMigration,
       disabled: disabled,
       beforeSend: beforeSend,
       onError: onError ?? (error, stackTrace) => fail('Unexpected $error'),
@@ -124,12 +122,37 @@ void main() {
           'posthog_api/$posthogApiVersion');
     });
 
-    test('historicalMigration marks the batch', () async {
+    test('DateTime properties are sent as ISO-8601 strings', () async {
       final fake = RecordingClient();
-      final posthog = _client(fake, historicalMigration: true);
-      posthog.capture(distinctId: 'u', event: 'e');
+      final posthog = _client(fake);
+      posthog.capture(
+        distinctId: 'u',
+        event: 'e',
+        properties: {'at': DateTime.utc(2026, 1, 2, 3, 4, 5, 6)},
+      );
       await posthog.flush();
-      expect(fake.batches.single.json['historical_migration'], isTrue);
+      expect(
+        (fake.events.single['properties']! as Map)['at'],
+        '2026-01-02T03:04:05.006Z',
+      );
+    });
+
+    test('an event that cannot be encoded is dropped alone and reported',
+        () async {
+      final errors = <Object>[];
+      final fake = RecordingClient();
+      final posthog = _client(fake, onError: (e, st) => errors.add(e));
+      posthog.capture(
+          distinctId: 'u', event: 'bad', properties: {'n': double.nan});
+      posthog.capture(distinctId: 'u', event: 'good');
+      await posthog.flush();
+      expect(fake.events.map((e) => e['event']), ['good']);
+      expect(errors.single, isA<JsonUnsupportedObjectError>());
+      await expectLater(
+        posthog.captureImmediate(
+            distinctId: 'u', event: 'bad', properties: {'n': double.nan}),
+        throwsA(isA<JsonUnsupportedObjectError>()),
+      );
     });
 
     test('gzips the batch body by default', () async {
@@ -156,6 +179,34 @@ void main() {
       final event = fake.events.single;
       expect(event['event'], 'e_renamed');
       expect((event['properties']! as Map)['a'], 1);
+    });
+
+    test('a hook that throws drops the event and reports the error', () async {
+      final errors = <Object>[];
+      final fake = RecordingClient();
+      final posthog = _client(
+        fake,
+        beforeSend: [(e) => throw StateError('hook')],
+        onError: (e, st) => errors.add(e),
+      );
+      posthog.capture(distinctId: 'u', event: 'e');
+      await posthog.flush();
+      expect(fake.requests, isEmpty);
+      expect(errors.single, isA<StateError>());
+    });
+
+    test('an onError that throws reaches the zone, not the caller', () async {
+      final uncaught = <Object>[];
+      final fake = RecordingClient();
+      await runZonedGuarded(() async {
+        final posthog = _client(
+          fake,
+          beforeSend: [(e) => throw StateError('hook')],
+          onError: (e, st) => throw ArgumentError('handler'),
+        );
+        posthog.capture(distinctId: 'u', event: 'e');
+      }, (error, stackTrace) => uncaught.add(error));
+      expect(uncaught.single, isA<ArgumentError>());
     });
 
     test('drops an event when a hook returns null', () async {
@@ -244,6 +295,43 @@ void main() {
       release.complete();
       await flushed;
       expect(fake.events.single['event'], 'e');
+    });
+
+    test('only one background flush runs at a time', () async {
+      final errors = <Object>[];
+      final fake = RecordingClient(responder: (request, attempt) async {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        throw http.ClientException('down');
+      });
+      final posthog = _client(
+        fake,
+        flushAt: 1,
+        fetchRetryCount: 0,
+        onError: (e, st) => errors.add(e),
+      );
+      for (var i = 0; i < 5; i++) {
+        posthog.capture(distinctId: 'u', event: 'e$i');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(fake.requests, hasLength(1));
+      expect(errors.single, isA<PostHogNetworkException>());
+      expect(posthog.queueLength, 5);
+    });
+
+    test('flush with a timeout gives up and keeps the events', () async {
+      final fake = RecordingClient(responder: (request, attempt) async {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        return null;
+      });
+      final posthog = _client(fake);
+      posthog.capture(distinctId: 'u', event: 'e');
+      await expectLater(
+        posthog.flush(timeout: const Duration(milliseconds: 20)),
+        throwsA(isA<PostHogTimeoutException>()
+            .having((e) => e.unsentEvents, 'unsentEvents', 1)),
+      );
+      await posthog.flush();
+      expect(posthog.queueLength, 0);
     });
 
     test('concurrent flushes send each event once', () async {
@@ -338,6 +426,26 @@ void main() {
       );
     });
 
+    test('a timed-out request is aborted', () async {
+      final sent = Completer<http.BaseRequest>();
+      final client = _HangingClient(sent);
+      final posthog = PostHog(
+        'phc_test',
+        httpClient: client,
+        fetchRetryCount: 0,
+        requestTimeout: const Duration(milliseconds: 20),
+      );
+      await expectLater(
+        posthog.captureImmediate(distinctId: 'u', event: 'e'),
+        throwsA(isA<PostHogNetworkException>()),
+      );
+      final request = await sent.future;
+      expect(request, isA<http.Abortable>());
+      await (request as http.Abortable)
+          .abortTrigger!
+          .timeout(const Duration(seconds: 1));
+    });
+
     test('background flush failures go to onError, never the zone', () async {
       final errors = <Object>[];
       final fake =
@@ -396,6 +504,56 @@ void main() {
       expect(all.featureFlagPayloads, {
         'b': {'x': 1},
       });
+    });
+
+    test('one malformed flag does not discard the others', () async {
+      final fake = RecordingClient(flagsResponse: {
+        'flags': {
+          'ok': {'key': 'ok', 'enabled': true},
+          'odd': {
+            'key': 'odd',
+            'enabled': 'yes',
+            'variant': 3,
+            'metadata': {
+              'id': '12',
+              'payload': {'inline': true},
+            },
+          },
+          'junk': 'not a map',
+        },
+        'quotaLimited': 'nope',
+        'requestId': 7,
+      });
+      final posthog = _client(fake);
+      final all = await posthog.getAllFlagsAndPayloads('u');
+      expect(all.featureFlags, {'ok': true, 'odd': false});
+      expect(
+        await posthog.getFeatureFlagResult('odd', 'u',
+            sendFeatureFlagEvents: false),
+        isA<FeatureFlagResult>()
+            .having((r) => r.payload, 'payload', {'inline': true}),
+      );
+    });
+
+    test('a flag evaluation racing shutdown does not throw', () async {
+      final release = Completer<void>();
+      final fake = RecordingClient(
+        flagsResponse: {
+          'flags': {
+            'f': {'key': 'f', 'enabled': true},
+          },
+        },
+        responder: (request, attempt) async {
+          if (request.url.path.startsWith('/flags')) await release.future;
+          return null;
+        },
+      );
+      final posthog = _client(fake);
+      final value = posthog.getFeatureFlag('f', 'u');
+      await pumpEventQueue();
+      await posthog.shutdown();
+      release.complete();
+      expect(await value, isTrue);
     });
 
     test('getFeatureFlagResult tells a missing payload from a missing flag',
@@ -473,9 +631,37 @@ void main() {
       posthog.capture(distinctId: 'u', event: 'e');
       await expectLater(
         posthog.shutdown(timeout: const Duration(milliseconds: 20)),
-        throwsA(isA<PostHogShutdownTimeoutException>()
+        throwsA(isA<PostHogTimeoutException>()
             .having((e) => e.unsentEvents, 'unsentEvents', 1)),
       );
     });
+
+    test('requests in flight at the shutdown deadline are not retried',
+        () async {
+      final fake = RecordingClient(responder: (request, attempt) async {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        return _status(503);
+      });
+      final posthog = _client(fake, onError: (error, stackTrace) {});
+      posthog.capture(distinctId: 'u', event: 'e');
+      await expectLater(
+        posthog.shutdown(timeout: const Duration(milliseconds: 20)),
+        throwsA(isA<PostHogTimeoutException>()),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(fake.requests, hasLength(1));
+    });
   });
+}
+
+class _HangingClient extends http.BaseClient {
+  _HangingClient(this.sent);
+
+  final Completer<http.BaseRequest> sent;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    sent.complete(request);
+    return Completer<http.StreamedResponse>().future;
+  }
 }

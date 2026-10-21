@@ -80,18 +80,17 @@ void main() {
       expect(tee.requests.single.events, hasLength(5));
     });
 
-    test('an uncompressed historical batch is accepted', () async {
+    test('an uncompressed batch is accepted', () async {
       final client = PostHog(
         apiKey,
         host: host,
         flushInterval: Duration.zero,
         disableCompression: true,
-        historicalMigration: true,
       );
       client.capture(
         distinctId: distinctId,
-        event: 'posthog_api historical',
-        timestamp: DateTime.now().subtract(const Duration(days: 1)),
+        event: 'posthog_api uncompressed',
+        properties: {'at': DateTime.now()},
       );
       await client.shutdown();
       expect(client.queueLength, 0);

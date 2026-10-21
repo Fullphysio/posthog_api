@@ -36,9 +36,9 @@ final class FeatureFlagResult {
 
 /// Every flag value and payload for one user, as returned by
 /// [PostHog.getAllFlagsAndPayloads].
-final class PostHogFlagsAndPayloads {
+final class FeatureFlagsAndPayloads {
   /// Creates the pair of maps.
-  const PostHogFlagsAndPayloads({
+  const FeatureFlagsAndPayloads({
     required this.featureFlags,
     required this.featureFlagPayloads,
   });

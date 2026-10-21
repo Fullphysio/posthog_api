@@ -9,6 +9,9 @@ on:
     # Weekly, to catch breakage from new SDK or dependency releases.
     - cron: '0 6 * * 1'
 
+permissions:
+  contents: read
+
 env:
   PUB_ENVIRONMENT: bot.github
 

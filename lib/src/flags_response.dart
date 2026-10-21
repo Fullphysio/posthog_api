@@ -15,17 +15,17 @@ final class _FlagDetail {
   factory _FlagDetail.fromJson(String key, Map<String, Object?> json) {
     final reason = json['reason'];
     final metadata = json['metadata'];
-    final reasonMap = reason is Map<String, Object?> ? reason : null;
-    final metadataMap = metadata is Map<String, Object?> ? metadata : null;
+    final reasonMap = reason is Map ? reason : const <Object?, Object?>{};
+    final metadataMap = metadata is Map ? metadata : const <Object?, Object?>{};
     return _FlagDetail(
-      key: json['key'] as String? ?? key,
-      enabled: json['enabled'] as bool? ?? false,
-      variant: json['variant'] as String?,
-      reasonCode: reasonMap?['code'] as String?,
-      reasonDescription: reasonMap?['description'] as String?,
-      id: (metadataMap?['id'] as num?)?.toInt(),
-      version: (metadataMap?['version'] as num?)?.toInt(),
-      payload: metadataMap?['payload'] as String?,
+      key: key,
+      enabled: json['enabled'] == true,
+      variant: _stringOrNull(json['variant']),
+      reasonCode: _stringOrNull(reasonMap['code']),
+      reasonDescription: _stringOrNull(reasonMap['description']),
+      id: _intOrNull(metadataMap['id']),
+      version: _intOrNull(metadataMap['version']),
+      payload: metadataMap['payload'],
     );
   }
 
@@ -36,11 +36,11 @@ final class _FlagDetail {
   final String? reasonDescription;
   final int? id;
   final int? version;
-  final String? payload;
+  final Object? payload;
 
   Object get value => variant ?? enabled;
 
-  Object? get decodedPayload => payload == null ? null : _parsePayload(payload);
+  Object? get decodedPayload => _parsePayload(payload);
 }
 
 final class _FlagsResponse {
@@ -53,48 +53,39 @@ final class _FlagsResponse {
   });
 
   factory _FlagsResponse.fromJson(Map<String, Object?> json) {
-    final errors = json['errorsWhileComputingFlags'] as bool? ?? false;
-    final quota = (json['quotaLimited'] as List<Object?>? ?? const [])
-        .whereType<String>()
-        .toList();
-    final requestId = json['requestId'] as String?;
-    final evaluatedAt = (json['evaluatedAt'] as num?)?.toInt();
-
+    final quota = json['quotaLimited'];
     final Map<String, _FlagDetail> flags;
     final v2 = json['flags'];
-    if (v2 is Map<String, Object?>) {
+    if (v2 is Map) {
       flags = {
-        for (final entry in v2.entries)
-          if (entry.value is Map<String, Object?>)
-            entry.key: _FlagDetail.fromJson(
-              entry.key,
-              entry.value! as Map<String, Object?>,
-            ),
+        for (final MapEntry(:key, :value) in v2.entries)
+          if (key is String && value is Map<String, Object?>)
+            key: _FlagDetail.fromJson(key, value),
       };
     } else {
-      final values = json['featureFlags'] as Map<String, Object?>? ?? const {};
-      final payloads =
-          json['featureFlagPayloads'] as Map<String, Object?>? ?? const {};
+      final values = json['featureFlags'];
+      final payloads = json['featureFlagPayloads'];
+      final payloadMap =
+          payloads is Map ? payloads : const <Object?, Object?>{};
       flags = {
-        for (final entry in values.entries)
-          if (entry.value is bool || entry.value is String)
-            entry.key: _FlagDetail(
-              key: entry.key,
-              enabled: entry.value is String || entry.value == true,
-              variant: entry.value is String ? entry.value! as String : null,
-              payload: payloads[entry.key] == null
-                  ? null
-                  : jsonEncode(_parsePayload(payloads[entry.key])),
-            ),
+        if (values is Map)
+          for (final MapEntry(:key, :value) in values.entries)
+            if (key is String && (value is bool || value is String))
+              key: _FlagDetail(
+                key: key,
+                enabled: value is String || value == true,
+                variant: value is String ? value : null,
+                payload: payloadMap[key],
+              ),
       };
     }
 
     return _FlagsResponse(
       flags: flags,
-      errorsWhileComputingFlags: errors,
-      quotaLimited: quota,
-      requestId: requestId,
-      evaluatedAt: evaluatedAt,
+      errorsWhileComputingFlags: json['errorsWhileComputingFlags'] == true,
+      quotaLimited: quota is List ? quota.whereType<String>().toList() : [],
+      requestId: _stringOrNull(json['requestId']),
+      evaluatedAt: _intOrNull(json['evaluatedAt']),
     );
   }
 
@@ -124,3 +115,7 @@ Object? _parsePayload(Object? payload) {
     return payload;
   }
 }
+
+String? _stringOrNull(Object? value) => value is String ? value : null;
+
+int? _intOrNull(Object? value) => value is num ? value.toInt() : null;

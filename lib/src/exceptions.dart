@@ -1,3 +1,5 @@
+import 'posthog.dart';
+
 /// Base class of every error this package throws or reports.
 sealed class PostHogException implements Exception {
   const PostHogException(this.message);
@@ -18,7 +20,7 @@ final class PostHogHttpException extends PostHogException {
     required this.requestByteLength,
   }) : super(
           'HTTP error while fetching PostHog: status=$statusCode, '
-          'reqByteLength=$requestByteLength, body=$body',
+          'reqByteLength=$requestByteLength, body=${_truncate(body)}',
         );
 
   /// The HTTP status code PostHog returned.
@@ -42,15 +44,19 @@ final class PostHogNetworkException extends PostHogException {
   final Object cause;
 }
 
-/// [PostHog.shutdown] did not finish sending queued events in time.
-final class PostHogShutdownTimeoutException extends PostHogException {
+/// [PostHog.flush] or [PostHog.shutdown] did not finish sending queued
+/// events within its `timeout`. The events stay queued.
+final class PostHogTimeoutException extends PostHogException {
   /// Creates the exception, recording how many events were left unsent.
-  const PostHogShutdownTimeoutException(this.unsentEvents)
+  const PostHogTimeoutException(this.unsentEvents)
       : super(
-          'Timeout while shutting down PostHog. '
+          'Timeout while sending events to PostHog. '
           '$unsentEvents event(s) may not have been sent.',
         );
 
   /// The number of events still queued when the deadline passed.
   final int unsentEvents;
 }
+
+String _truncate(String body) =>
+    body.length <= 200 ? body : '${body.substring(0, 200)}…';

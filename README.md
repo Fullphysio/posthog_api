@@ -13,8 +13,8 @@ other packages on pub.dev all depend on Flutter, which pub refuses to resolve
 inside a plain Dart project. This is a port of the official Node.js SDK,
 `posthog-node`, instead.
 
-Used in production at [Fullphysio](https://www.fullphysio.com), where it runs
-inside our Dart Cloud Functions. Bug reports are welcome — see
+Built by [Fullphysio](https://www.fullphysio.com) for its Dart Cloud
+Functions. Bug reports are welcome — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```dart
@@ -51,7 +51,13 @@ sent in the background once `flushAt` events (default 20) are waiting, or
 
 On Cloud Run and Cloud Functions the CPU can be throttled as soon as a request
 returns, so **`await posthog.flush()` before returning**. `flush()` also waits
-for captures still evaluating `sendFeatureFlags`. Create one client per
+for captures still evaluating `sendFeatureFlags`. Give it a timeout so a
+PostHog outage cannot hold the request open; unsent events stay queued for the
+next flush:
+
+```dart
+await posthog.flush(timeout: const Duration(seconds: 5));
+``` Create one client per
 process and reuse it across requests:
 
 ```dart
@@ -107,12 +113,17 @@ posthog.capture(
 |---|---|
 | `PostHogHttpException` | PostHog answered outside `200..399` |
 | `PostHogNetworkException` | no response: DNS, refused or reset connection, timeout |
-| `PostHogShutdownTimeoutException` | `shutdown()` deadline passed with events still queued |
+| `PostHogTimeoutException` | `flush(timeout:)` or `shutdown()` deadline passed with events still queued |
 
 `flush()` and the `*Immediate` methods throw them once retries are exhausted.
 Nothing else throws for delivery problems: background flushes, flag requests
 and the flush inside `shutdown()` report to `onError`, which prints by default.
 Flag methods return `null` when PostHog cannot be reached.
+
+`capture` never throws over its input either. A property that cannot be
+encoded as JSON (a `double.nan`, an object without `toJson`) or a `beforeSend`
+hook that throws drops that one event and reports the error to `onError`.
+`DateTime` properties are sent as ISO-8601 strings, as in `posthog-node`.
 
 After a network error the unsent events stay queued for the next flush. After
 an HTTP error the rejected batch is dropped, since resending it would fail the
@@ -130,7 +141,7 @@ uuid), identify, alias, group identify, the `*Immediate` variants, batching via
 `flush()` / `shutdown()`, and remote feature flag evaluation with
 `$feature_flag_called` events.
 
-Not covered: local flag evaluation (polling definitions with a personal API
+Not covered: historical migration batches, local flag evaluation (polling definitions with a personal API
 key), flag overrides, `captureException` / error tracking, encrypted remote
 config payloads, super properties (`register`), and request context
 (`withContext`). Open an issue if you need one of these.

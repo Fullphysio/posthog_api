@@ -24,7 +24,7 @@ final class PostHogEvent {
   final Map<String, Object?> properties;
 
   /// Group type to group key, sent as `$groups`.
-  final Map<String, Object>? groups;
+  final Map<String, String>? groups;
 
   /// When the event happened. Defaults to the time it is queued.
   final DateTime? timestamp;
@@ -41,7 +41,7 @@ final class PostHogEvent {
     String? distinctId,
     String? event,
     Map<String, Object?>? properties,
-    Map<String, Object>? groups,
+    Map<String, String>? groups,
     DateTime? timestamp,
     String? uuid,
     bool? disableGeoip,
