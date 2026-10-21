@@ -32,7 +32,10 @@ Three tiers:
 - **Integration** (`test/integration/`, tag `integration`) — sends real events
   and evaluates flags. Skipped by default (see `dart_test.yaml`); run with
   `POSTHOG_TEST_API_KEY=phc_... dart test --tags integration --run-skipped`.
-  It skips itself when the key is unset. Assertions are structural.
+  It skips itself when the key is unset. The flag tests need the five
+  `posthog-api-*` flags described by `Flags` in the test file; they exist in
+  the "posthog_api CI" project (EU, id 314824) that CI points at. Ingestion
+  tests run against any project.
 
 ## CI
 

@@ -118,6 +118,10 @@ After a network error the unsent events stay queued for the next flush. After
 an HTTP error the rejected batch is dropped, since resending it would fail the
 same way.
 
+PostHog's `/batch/` endpoint answers `200` to an unknown project key and drops
+the events later, so a wrong key never fails a capture. A flag call does fail
+with `401`, which makes `isFeatureEnabled` a cheap startup check.
+
 ## Scope
 
 Covered: capture (with `$set` / `$set_once`, groups, custom timestamp and
