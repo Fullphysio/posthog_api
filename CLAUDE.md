@@ -49,9 +49,11 @@ Three tiers:
   requests: an upstream outage must never block a merge.
 - `publish.yml` — releases on a `v<version>` tag via GitHub OIDC, through the
   `pub.dev` GitHub environment: only `v*` tags, and a required reviewer must
-  approve the run. pub.dev's automated publishing must require the same
-  environment. No stored credentials. Every workflow sets read-only
-  `permissions`; actions are pinned by commit SHA.
+  approve the run. Before the gate it re-runs format, analyze and tests and
+  checks `CHANGELOG.md` has a `## <version>` heading; after publishing it
+  creates the GitHub release from that entry. pub.dev's automated publishing
+  must require the same environment. No stored credentials. Every workflow
+  sets read-only `permissions`; actions are pinned by commit SHA.
 
 ## Releasing
 

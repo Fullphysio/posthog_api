@@ -10,3 +10,9 @@ node_modules/
 # The fixture-capture scripts are build-time inputs; they need Node and
 # posthog-node, and are of no use to consumers.
 tool/
+
+# Repository housekeeping that consumers never read.
+.editorconfig
+CLAUDE.md
+CODE_OF_CONDUCT.md
+SECURITY.md

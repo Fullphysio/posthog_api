@@ -1,0 +1,21 @@
+name: Feature request
+description: A posthog-node capability this package does not cover yet.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need
+      description: The method or option, and what you would use it for.
+    validations:
+      required: true
+  - type: input
+    id: upstream
+    attributes:
+      label: posthog-node equivalent
+      description: Method name or a link to its docs, if it exists there.
+      placeholder: posthog.captureException(...)
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
