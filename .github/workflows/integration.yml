@@ -24,9 +24,10 @@ jobs:
       - run: dart pub get
       - name: Run integration tests
         env:
-          # A PostHog project key can only send events and read flags, so it
-          # is a variable, not a secret. The tests skip themselves when it is
+          # A project key can only send events and read flags, but logs of a
+          # public repo are public, so it is a secret to keep junk events out
+          # of the dedicated CI project. The tests skip themselves when it is
           # unset, so forks and contributors are never blocked.
-          POSTHOG_TEST_API_KEY: ${{ vars.POSTHOG_TEST_API_KEY }}
+          POSTHOG_TEST_API_KEY: ${{ secrets.POSTHOG_TEST_API_KEY }}
           POSTHOG_TEST_HOST: ${{ vars.POSTHOG_TEST_HOST }}
         run: dart test --tags integration --run-skipped

@@ -40,7 +40,9 @@ Three tiers:
   declared SDK floor and stable, plus a `pana` job that fails if the pub.dev
   score drops below maximum. Runs weekly too, to catch SDK and dependency drift.
 - `integration.yml` — live API tests on main, nightly and on demand, reading
-  the `POSTHOG_TEST_API_KEY` repository variable. Deliberately not on pull
+  the `POSTHOG_TEST_API_KEY` repository secret: the key of a dedicated
+  "posthog_api CI" project on PostHog EU, so test events never mix with real
+  data. Deliberately not on pull
   requests: an upstream outage must never block a merge.
 - `publish.yml` — releases on a `v<version>` tag via GitHub OIDC. No stored
   credentials.
