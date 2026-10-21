@@ -1,0 +1,12 @@
+# Publishing-only excludes. When this file exists pub uses it INSTEAD of
+# .gitignore, so it has to repeat those entries too.
+.dart_tool/
+build/
+coverage/
+pubspec.lock
+doc/api/
+node_modules/
+
+# The fixture-capture scripts are build-time inputs; they need Node and
+# posthog-node, and are of no use to consumers.
+tool/

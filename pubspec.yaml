@@ -1,0 +1,24 @@
+name: posthog_api
+description: >-
+  Pure Dart server-side client for PostHog: event capture, identify, alias,
+  groups, batching with retries, and remote feature flags. A port of
+  posthog-node.
+version: 1.0.0
+repository: https://github.com/Fullphysio/posthog_api
+issue_tracker: https://github.com/Fullphysio/posthog_api/issues
+
+topics:
+  - posthog
+  - analytics
+  - feature-flags
+  - server
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  http: ^1.6.0
+
+dev_dependencies:
+  lints: ^5.1.1
+  test: ^1.25.0

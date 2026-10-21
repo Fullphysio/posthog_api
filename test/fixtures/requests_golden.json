@@ -1,0 +1,833 @@
+{
+  "upstream": "posthog-node@5.29.2",
+  "flagsResponse": {
+    "flags": {
+      "beta-feature": {
+        "key": "beta-feature",
+        "enabled": true,
+        "variant": null,
+        "reason": {
+          "code": "condition_match",
+          "description": "Matched condition set 1",
+          "condition_index": 0
+        },
+        "metadata": {
+          "id": 11,
+          "version": 3,
+          "payload": "{\"discount\":10}",
+          "description": null
+        }
+      },
+      "pricing-test": {
+        "key": "pricing-test",
+        "enabled": true,
+        "variant": "variant-b",
+        "reason": {
+          "code": "condition_match",
+          "description": "Matched condition set 2",
+          "condition_index": 1
+        },
+        "metadata": {
+          "id": 12,
+          "version": 1,
+          "payload": null,
+          "description": null
+        }
+      },
+      "disabled-flag": {
+        "key": "disabled-flag",
+        "enabled": false,
+        "variant": null,
+        "reason": {
+          "code": "no_condition_match",
+          "description": "No matching condition set",
+          "condition_index": null
+        },
+        "metadata": {
+          "id": 13,
+          "version": 7,
+          "payload": null,
+          "description": null
+        }
+      }
+    },
+    "errorsWhileComputingFlags": false,
+    "requestId": "0f801b5b-0776-42ca-b0f7-8375c95730bf",
+    "evaluatedAt": 1760000000000
+  },
+  "cases": [
+    {
+      "name": "capture_with_set_and_groups",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "program_created",
+                "properties": {
+                  "$set": {
+                    "plan": "pro"
+                  },
+                  "$set_once": {
+                    "first_seen": "2026-01-01"
+                  },
+                  "exercises": 3,
+                  "$groups": {
+                    "company": "acme"
+                  },
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "capture_set_event",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$set",
+                "properties": {
+                  "$set": {
+                    "name": "Ada",
+                    "isPatient": false
+                  },
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "capture_with_geoip_enabled",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "opened",
+                "properties": {
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>"
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "capture_without_distinct_id",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "<uuid>",
+                "event": "cron_ran",
+                "properties": {
+                  "jobs": 2,
+                  "$process_person_profile": false,
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ai_generation",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$ai_generation",
+                "properties": {
+                  "$ai_trace_id": "trace-1",
+                  "$ai_provider": "anthropic",
+                  "$ai_model": "claude-sonnet-5-5",
+                  "$ai_input_tokens": 120,
+                  "$ai_output_tokens": 40,
+                  "$ai_latency": 1.25,
+                  "$ai_input": [
+                    {
+                      "role": "user",
+                      "content": "hi"
+                    }
+                  ],
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identify_plain_properties",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$identify",
+                "properties": {
+                  "$set": {
+                    "email": "ada@example.com"
+                  },
+                  "$set_once": {
+                    "signup": "web"
+                  },
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "identify",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "identify_explicit_set",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$identify",
+                "properties": {
+                  "$set": {
+                    "plan": "pro"
+                  },
+                  "$set_once": {},
+                  "$anon_distinct_id": "anon-9",
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "identify",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "alias",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$create_alias",
+                "properties": {
+                  "distinct_id": "user-1",
+                  "alias": "legacy-42",
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "alias",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "group_identify",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "$company_acme",
+                "event": "$groupidentify",
+                "properties": {
+                  "$group_type": "company",
+                  "$group_key": "acme",
+                  "$group_set": {
+                    "seats": 12
+                  },
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "group_identify_with_distinct_id",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$groupidentify",
+                "properties": {
+                  "$group_type": "company",
+                  "$group_key": "acme",
+                  "$group_set": {},
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "capture_immediate",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "paid",
+                "properties": {
+                  "amount": 30,
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "two_events_one_batch",
+      "requests": [
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "a",
+                "properties": {
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              },
+              {
+                "distinct_id": "user-2",
+                "event": "b",
+                "properties": {
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_feature_flag_variant",
+      "requests": [
+        {
+          "path": "/flags/?v=2",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "token": "phc_test",
+            "distinct_id": "user-1",
+            "groups": {
+              "company": "acme"
+            },
+            "person_properties": {
+              "distinct_id": "user-1",
+              "plan": "pro"
+            },
+            "group_properties": {
+              "company": {
+                "$group_key": "acme",
+                "seats": "12"
+              }
+            },
+            "geoip_disable": true,
+            "flag_keys_to_evaluate": [
+              "pricing-test"
+            ]
+          }
+        },
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$feature_flag_called",
+                "properties": {
+                  "$feature_flag": "pricing-test",
+                  "$feature_flag_response": "variant-b",
+                  "$feature_flag_id": 12,
+                  "$feature_flag_version": 1,
+                  "$feature_flag_reason": "Matched condition set 2",
+                  "locally_evaluated": false,
+                  "$feature/pricing-test": "variant-b",
+                  "$feature_flag_request_id": "0f801b5b-0776-42ca-b0f7-8375c95730bf",
+                  "$feature_flag_evaluated_at": 1760000000000,
+                  "$groups": {
+                    "company": "acme"
+                  },
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_feature_flag_disabled",
+      "requests": [
+        {
+          "path": "/flags/?v=2",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "token": "phc_test",
+            "distinct_id": "user-1",
+            "groups": {},
+            "person_properties": {
+              "distinct_id": "user-1"
+            },
+            "group_properties": {},
+            "geoip_disable": true,
+            "flag_keys_to_evaluate": [
+              "disabled-flag"
+            ]
+          }
+        },
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$feature_flag_called",
+                "properties": {
+                  "$feature_flag": "disabled-flag",
+                  "$feature_flag_response": false,
+                  "$feature_flag_id": 13,
+                  "$feature_flag_version": 7,
+                  "$feature_flag_reason": "No matching condition set",
+                  "locally_evaluated": false,
+                  "$feature/disabled-flag": false,
+                  "$feature_flag_request_id": "0f801b5b-0776-42ca-b0f7-8375c95730bf",
+                  "$feature_flag_evaluated_at": 1760000000000,
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_feature_flag_missing",
+      "requests": [
+        {
+          "path": "/flags/?v=2",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "token": "phc_test",
+            "distinct_id": "user-1",
+            "groups": {},
+            "person_properties": {
+              "distinct_id": "user-1"
+            },
+            "group_properties": {},
+            "geoip_disable": true,
+            "flag_keys_to_evaluate": [
+              "nope"
+            ]
+          }
+        },
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$feature_flag_called",
+                "properties": {
+                  "$feature_flag": "nope",
+                  "locally_evaluated": false,
+                  "$feature_flag_request_id": "0f801b5b-0776-42ca-b0f7-8375c95730bf",
+                  "$feature_flag_evaluated_at": 1760000000000,
+                  "$feature_flag_error": "flag_missing",
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_feature_flag_called_once",
+      "requests": [
+        {
+          "path": "/flags/?v=2",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "token": "phc_test",
+            "distinct_id": "user-1",
+            "groups": {},
+            "person_properties": {
+              "distinct_id": "user-1"
+            },
+            "group_properties": {},
+            "geoip_disable": true,
+            "flag_keys_to_evaluate": [
+              "beta-feature"
+            ]
+          }
+        },
+        {
+          "path": "/flags/?v=2",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "token": "phc_test",
+            "distinct_id": "user-1",
+            "groups": {},
+            "person_properties": {
+              "distinct_id": "user-1"
+            },
+            "group_properties": {},
+            "geoip_disable": true,
+            "flag_keys_to_evaluate": [
+              "beta-feature"
+            ]
+          }
+        },
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "$feature_flag_called",
+                "properties": {
+                  "$feature_flag": "beta-feature",
+                  "$feature_flag_response": true,
+                  "$feature_flag_id": 11,
+                  "$feature_flag_version": 3,
+                  "$feature_flag_reason": "Matched condition set 1",
+                  "locally_evaluated": false,
+                  "$feature/beta-feature": true,
+                  "$feature_flag_request_id": "0f801b5b-0776-42ca-b0f7-8375c95730bf",
+                  "$feature_flag_evaluated_at": 1760000000000,
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_feature_flag_payload",
+      "requests": [
+        {
+          "path": "/flags/?v=2",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "token": "phc_test",
+            "distinct_id": "user-1",
+            "groups": {},
+            "person_properties": {
+              "distinct_id": "user-1"
+            },
+            "group_properties": {},
+            "geoip_disable": true,
+            "flag_keys_to_evaluate": [
+              "beta-feature"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "get_all_flags_and_payloads",
+      "requests": [
+        {
+          "path": "/flags/?v=2",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "token": "phc_test",
+            "distinct_id": "user-1",
+            "groups": {},
+            "person_properties": {
+              "distinct_id": "user-1"
+            },
+            "group_properties": {},
+            "geoip_disable": true,
+            "flag_keys_to_evaluate": [
+              "beta-feature",
+              "pricing-test"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "capture_with_send_feature_flags",
+      "requests": [
+        {
+          "path": "/flags/?v=2",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "token": "phc_test",
+            "distinct_id": "user-1",
+            "groups": {},
+            "person_properties": {},
+            "group_properties": {},
+            "geoip_disable": true
+          }
+        },
+        {
+          "path": "/batch/",
+          "method": "POST",
+          "contentType": "application/json",
+          "body": {
+            "api_key": "phc_test",
+            "batch": [
+              {
+                "distinct_id": "user-1",
+                "event": "checkout",
+                "properties": {
+                  "$feature/beta-feature": true,
+                  "$feature/pricing-test": "variant-b",
+                  "$feature/disabled-flag": false,
+                  "$active_feature_flags": [
+                    "beta-feature",
+                    "pricing-test"
+                  ],
+                  "$lib": "<lib>",
+                  "$lib_version": "<lib_version>",
+                  "$geoip_disable": true
+                },
+                "type": "capture",
+                "library": "<lib>",
+                "library_version": "<lib_version>",
+                "timestamp": "<timestamp>",
+                "uuid": "<uuid>"
+              }
+            ],
+            "sent_at": "<sent_at>"
+          }
+        }
+      ]
+    }
+  ]
+}

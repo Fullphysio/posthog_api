@@ -1,0 +1,5 @@
+tags:
+  mock:
+    timeout: 30s
+  integration:
+    skip: "Hits the live PostHog API. Run with: dart test --tags integration --run-skipped"
