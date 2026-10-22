@@ -8,15 +8,53 @@ on:
 
 permissions: {}
 
+env:
+  PUB_ENVIRONMENT: bot.github
+
 jobs:
+  verify:
+    name: Verify the tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+        with:
+          sdk: stable
+      - run: dart pub get
+      - run: dart format --output=none --set-exit-if-changed .
+      - run: dart analyze --fatal-infos
+      - run: dart test
+      - name: CHANGELOG has an entry for this version
+        run: grep -qx "## ${GITHUB_REF_NAME#v}" CHANGELOG.md
+
   publish:
+    needs: verify
     permissions:
       id-token: write
     # Pinned to the commit of the `v1` tag, like every other action here.
-    uses: dart-lang/setup-dart/.github/workflows/publish.yml@6afc89df92d6eb3834022f73cd65adc8cdfcb92d
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
     # The `pub.dev` environment requires a reviewer, so pushing a tag alone
     # cannot publish. pub.dev's automated publishing must name the same
     # environment. `environment` is an input of the reusable workflow; as a
     # job key here it would fail the run.
     with:
       environment: pub.dev
+
+  release:
+    name: GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create the release from the CHANGELOG entry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## $version" '$0 == heading {found=1; next} /^## / {found=0} found' CHANGELOG.md > notes.md
+          printf '\nhttps://pub.dev/packages/posthog_api/versions/%s\n' "$version" >> notes.md
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md

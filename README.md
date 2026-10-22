@@ -2,6 +2,7 @@
 
 [![pub package](https://img.shields.io/pub/v/posthog_api.svg)](https://pub.dev/packages/posthog_api)
 [![CI](https://github.com/Fullphysio/posthog_api/actions/workflows/ci.yml/badge.svg)](https://github.com/Fullphysio/posthog_api/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A pure Dart server-side client for [PostHog](https://posthog.com). Capture
 events, identify users, alias ids and update groups through a batched,
@@ -16,6 +17,10 @@ inside a plain Dart project. This is a port of the official Node.js SDK,
 Built by [Fullphysio](https://www.fullphysio.com) for its Dart Cloud
 Functions. Bug reports are welcome — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
+
+```
+dart pub add posthog_api
+```
 
 ```dart
 import 'package:posthog_api/posthog_api.dart';

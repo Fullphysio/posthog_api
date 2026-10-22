@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: PostHog itself (ingestion, flags, billing, the UI)
+    url: https://posthog.com/questions
+    about: Questions about PostHog rather than this client go to the PostHog community.
+  - name: PostHog API reference
+    url: https://posthog.com/docs/api
+    about: What /batch/ and /flags/ accept and return.
